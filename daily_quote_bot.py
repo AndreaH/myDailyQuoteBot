@@ -40,7 +40,7 @@ async def generate_and_send_quotes():
     
     # 3. 콘텐츠 생성 (모델명 확인: 'gemini-2.0-flash' 사용 추천)
     response = client.models.generate_content(
-        model='gemini-2.0-flash', 
+        model='gemini-2.5-flash', 
         contents=prompt
     )
     
