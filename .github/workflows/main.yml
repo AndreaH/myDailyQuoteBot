@@ -1,5 +1,5 @@
 name: Daily Book Quote Bot
-
+  
 on:
   schedule:
     # 매일 한국 시간 오전 8시 (UTC 23:00) 실행
@@ -21,7 +21,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install google-generativeai python-telegram-bot
+        pip install google-genai python-telegram-bot  # google-generativeai 대신 google-genai 사용
 
     - name: Run bot script
       env:
