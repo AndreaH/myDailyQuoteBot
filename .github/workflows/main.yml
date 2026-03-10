@@ -21,7 +21,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install google-genai python-telegram-bot  # google-generativeai 대신 google-genai 사용
+        pip install --upgrade pip
+        pip install google-genai python-telegram-bot
 
     - name: Run bot script
       env:
