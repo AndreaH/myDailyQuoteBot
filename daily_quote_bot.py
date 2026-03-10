@@ -38,39 +38,47 @@ def create_image_card(text, book_title):
     except Exception:
         base_img = Image.new('RGBA', (width, height), color=(30, 30, 30, 255))
 
-    # 2. 가독성을 위한 오버레이 추가
-    overlay = Image.new('RGBA', base_img.size, (0, 0, 0, 160))
+    # 2. 오버레이 (텍스트 가독성 향상)
+    overlay = Image.new('RGBA', base_img.size, (0, 0, 0, 170))
     base_img = Image.alpha_composite(base_img, overlay)
     draw = ImageDraw.Draw(base_img)
 
     # 3. 폰트 설정
     try:
         # 본문 폰트 크기를 약간 줄여 가독성 확보 (60 -> 50)
-        font_body = ImageFont.truetype("font.ttf", 50)
-        font_title = ImageFont.truetype("font.ttf", 35)
+        font_quote = ImageFont.truetype("font.ttf", 60)   # 본문 문구
+        font_info = ImageFont.truetype("font.ttf", 35)    # 책 제목 및 작가
+        font_page = ImageFont.truetype("font.ttf", 28)    # 페이지 수
     except OSError:
-        font_body = font_title = ImageFont.load_default()
+        font_quote = font_info = font_page = ImageFont.load_default()
 
-    # 4. 텍스트 줄바꿈 및 중앙 정렬 배치
-    wrapped_lines = textwrap.wrap(text, width=25)
-    line_heights = [draw.textbbox((0, 0), line, font=font_body)[3] for line in wrapped_lines]
-    total_text_height = sum(line_heights) + (len(wrapped_lines) - 1) * 20
+    # 4. 본문 문구 배치 (중앙 정렬)
+    wrapped_lines = textwrap.wrap(text, width=22)
+    line_spacing = 25
     
-    current_h = (height - total_text_height) / 2
+    # 전체 텍스트 높이 계산
+    total_text_height = sum([draw.textbbox((0, 0), line, font=font_quote)[3] for line in wrapped_lines]) + (len(wrapped_lines)-1) * line_spacing
+    current_h = (height - total_text_height) / 2 - 40 # 약간 위쪽으로 배치
     
     for line in wrapped_lines:
-        w = draw.textlength(line, font=font_body)
-        draw.text(((width - w) / 2, current_h), line, font=font_body, fill="white")
-        current_h += draw.textbbox((0, 0), line, font=font_body)[3] + 20
+        w = draw.textlength(line, font=font_quote)
+        draw.text(((width - w) / 2, current_h), line, font=font_quote, fill="#FFFFFF")
+        current_h += draw.textbbox((0, 0), line, font=font_quote)[3] + line_spacing
+    
+# 5. 책 정보 및 페이지 배치 (우측 하단)
+    # 제목(작가) 정보
+    info_text = f"출처: {book_title}"
+    info_w = draw.textlength(info_text, font=font_info)
+    draw.text((width - info_w - 70, height - 130), info_text, font=font_info, fill="#E0E0E0")
 
-    # 5. 책 제목 (우측 하단)
-    title_text = f"- {book_title}"
-    title_w = draw.textlength(title_text, font=font_title)
-    draw.text((width - title_w - 60, height - 80), title_text, font=font_title, fill="#BBBBBB")
+    # 페이지 정보 (더 작고 연한 색으로)
+    page_text = f"Page. {page_info}"
+    page_w = draw.textlength(page_text, font=font_page)
+    draw.text((width - page_w - 70, height - 80), page_text, font=font_page, fill="#AAAAAA")
 
     # 6. 바이트 변환
     img_byte_arr = io.BytesIO()
-    base_img.convert("RGB").save(img_byte_arr, format='JPEG', quality=90)
+    base_img.convert("RGB").save(img_byte_arr, format='JPEG', quality=95)
     img_byte_arr.seek(0)
     return img_byte_arr
     
@@ -101,29 +109,30 @@ async def generate_and_send_quotes():
 
         raw_text = response.text.strip()
 
-        # 2. 정규표현식 매칭 (NameError 방지를 위해 match 변수 먼저 생성)
+        # 정규표현식으로 문구, 제목(작가), 페이지 추출
         match = re.search(r'\[(.*?) \((.*?), p\.(.*?)\)\]', raw_text)
 
         if match:
             quote_text = match.group(1)
-            book_title = match.group(2)
+            book_info = match.group(2) # "제목(작가)" 형태
+            page_info = match.group(3) # "00" 형태
         else:
-            # 매칭 실패 시 수동 파싱 시도
-            quote_text = raw_text.replace('[', '').replace(']', '')
-            book_title = selected_books[0] # 폴백용 제목
+            quote_text = raw_text
+            book_info = selected_book
+            page_info = "미상"
             
-        # 3. 이미지 카드 생성 및 텔레그램 전송
+        # 이미지 생성 시 모든 정보 전달
+        image_data = create_image_card(quote_text, book_info, page_info)
+        
         async with Bot(token=TELEGRAM_TOKEN) as bot:
-            image_data = create_image_card(quote_text, book_title)
             await bot.send_photo(
                 chat_id=CHAT_ID, 
                 photo=image_data, 
-                caption=f"📚 {book_title}\n\n{quote_text}"
-            )
-            print("성공적으로 전송되었습니다.")
-
-    except Exception as e:
-        print(f"오류 발생: {e}")
+                caption=f"📚 {book_info}\n📄 {page_info}페이지\n\n{quote_text}"
+                )
+    
+        except Exception as e:
+    print(f"오류 발생: {e}")
 
 if __name__ == "__main__":
     asyncio.run(generate_and_send_quotes())
