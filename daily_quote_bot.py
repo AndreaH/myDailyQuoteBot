@@ -31,7 +31,7 @@ def create_image_card(text, book_title):
     """
     # 1. 배경 이미지 로드 (로컬에 background.jpg 파일 필요)
     try:
-        base_img = Image.open("background.jpg").convert("RGBA")
+        base_img = Image.open("background.png").convert("RGBA")
     except FileNotFoundError:
         # 배경 파일이 없을 경우 단색 배경 생성 (예비용)
         base_img = Image.new('RGBA', (1200, 800), color=(30, 30, 30, 255))
