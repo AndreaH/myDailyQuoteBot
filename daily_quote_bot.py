@@ -1,6 +1,7 @@
 import os
 import random
-from genai import Client  # 새로운 패키지 구조
+import asyncio
+from google import genai 
 from telegram import Bot
 import asyncio
 
