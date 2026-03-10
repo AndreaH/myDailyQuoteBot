@@ -24,19 +24,20 @@ BOOK_LIST = [
 
 async def generate_and_send_quotes():
     # 1. 랜덤 책 선정
-    selected_books = random.sample(BOOK_LIST, 5)
+    selected_books = random.sample(BOOK_LIST, 3)
     books_context = ", ".join(selected_books)
     
     # 2. 새로운 Gemini Client 설정 (Gemini 2.0 모델 사용 추천)
     client = genai.Client(api_key=GENAI_API_KEY)
     
     prompt = f"""
-    다음 도서 목록에서 각 권당 하나씩, 총 5개의 통찰력 있는 추천 문구를 작성해줘.
+    다음 도서 목록에서 각 권당 하나씩, 총 3개의 통찰력 있는 추천 문장를을 작성해줘.
     도서 목록: [{books_context}]
     
     조건:
-    1. 각 문구는 50자 이내로 작성할 것.
-    2. 형식: [문구 (책 제목, p.임의의 페이지)]
+    1. 각 문장은 100자 이내로 작성할 것.
+    2. 각 문장은 매일 중복되지 않게 선정하고, 작가가 중요하게 여기는 문장을 뽑아줄 것.
+    3. 형식: [문구 (책 제목, p.임의의 페이지)]
     """
     
     # 3. 콘텐츠 생성 (모델명 확인: 'gemini-2.0-flash' 사용 추천)
