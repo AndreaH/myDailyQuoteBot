@@ -23,7 +23,7 @@ BOOK_LIST = [
     "현명한 투자자(벤저민 그레이엄)", "돈, 뜨겁게 사랑하고 차갑게 다스려라(앙드레 코스톨라니)"
 ]
 
-def create_image_card(text, book_title):
+def create_image_card(text, book_title, page_info):
     """텍스트와 책 제목을 받아 이미지 카드를 생성하고 바이트 데이터로 반환합니다."""
     width, height = 1200, 800
     
