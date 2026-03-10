@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         pip install --upgrade pip
-        pip install google-genai python-telegram-bot
+        pip install google-genai python-telegram-bot Pillow
 
     - name: Run bot script
       env:
