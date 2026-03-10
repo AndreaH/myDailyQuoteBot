@@ -3,6 +3,7 @@ import random
 import asyncio
 from google import genai 
 from telegram import Bot
+from telegram.ext import ApplicationBuilder
 import asyncio
 
 # 1. 설정값 로드
@@ -45,8 +46,11 @@ async def generate_and_send_quotes():
     )
     
     # 4. 텔레그램 발송
-    bot = Bot(token=TELEGRAM_TOKEN)
-    await bot.send_message(chat_id=CHAT_ID, text=f"📚 오늘의 추천 문구입니다:\n\n{response.text}")
+    try:
+        async with Bot(token=TELEGRAM_TOKEN) as bot:
+            await bot.send_message(chat_id=CHAT_ID, text=f"📚 오늘의 추천 문구입니다:\n\n{response.text}")
+    except Exception as e:
+        print(f"텔레그램 전송 실패: {e}")
 
 if __name__ == "__main__":
     asyncio.run(generate_and_send_quotes())
