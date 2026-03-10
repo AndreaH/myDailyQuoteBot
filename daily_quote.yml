@@ -1,0 +1,31 @@
+name: Daily Book Quote Bot
+
+on:
+  schedule:
+    # 매일 한국 시간 오전 8시 (UTC 23:00) 실행
+    - cron: '0 23 * * *'
+  workflow_dispatch: # 수동으로 실행하고 싶을 때 사용
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install google-generativeai python-telegram-bot
+
+    - name: Run bot script
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        CHAT_ID: ${{ secrets.CHAT_ID }}
+      run: python daily_quote_bot.py  # 본인의 파이썬 파일명으로 수정하세요
