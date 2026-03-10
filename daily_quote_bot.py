@@ -131,7 +131,7 @@ async def generate_and_send_quotes():
                 caption=f"📚 {book_info}\n📄 {page_info}페이지\n\n{quote_text}"
                 )
     
-        except Exception as e:
+    except Exception as e:
     print(f"오류 발생: {e}")
 
 if __name__ == "__main__":
