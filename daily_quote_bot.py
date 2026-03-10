@@ -6,6 +6,9 @@ from telegram import Bot
 from telegram.ext import ApplicationBuilder
 import asyncio
 
+from PIL import Image, ImageDraw, ImageFont, ImageFilter  # Pillow 라이브러리
+import textwrap
+
 # 1. 설정값 로드
 GENAI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -22,6 +25,55 @@ BOOK_LIST = [
     "현명한 투자자(벤저민 그레이엄)", "돈, 뜨겁게 사랑하고 차갑게 다스려라(앙드레 코스톨라니)"
 ]
 
+def create_image_card(text, book_title):
+    """
+    텍스트와 책 제목을 받아 이미지 카드를 생성하고 바이트 데이터로 반환합니다.
+    """
+    # 1. 배경 이미지 로드 (로컬에 background.jpg 파일 필요)
+    try:
+        base_img = Image.open("background.jpg").convert("RGBA")
+    except FileNotFoundError:
+        # 배경 파일이 없을 경우 단색 배경 생성 (예비용)
+        base_img = Image.new('RGBA', (1200, 800), color=(30, 30, 30, 255))
+
+    width, height = base_img.size
+    draw = ImageDraw.Draw(base_img)
+
+    # 2. 가독성을 위한 오버레이(반투명 검은색) 추가
+    overlay = Image.new('RGBA', base_img.size, (0, 0, 0, 150))
+    base_img = Image.alpha_composite(base_img, overlay)
+    draw = ImageDraw.Draw(base_img) # 다시 그리기 객체 생성
+
+    # 3. 폰트 설정 (로컬에 font.ttf 파일 필요)
+    # 가독성을 위해 본문과 제목 폰트 크기를 다르게 설정
+    try:
+        font_body = ImageFont.truetype("font.ttf", 60)
+        font_title = ImageFont.truetype("font.ttf", 40)
+    except OSError:
+        # 폰트 파일이 없을 경우 기본 폰트 사용 (한글 깨짐 주의)
+        font_body = font_title = ImageFont.load_default()
+
+    # 4. 텍스트 자동 줄바꿈 처리 (가로폭의 80% 수준)
+    lines = textwrap.wrap(text, width=25) # 한글 기준 적절한 길이 조정 필요
+    current_h, pad = height * 0.3, 20
+    
+    # 5. 본문 텍스트 그리기 (중앙 정렬)
+    for line in lines:
+        w = draw.textlength(line, font=font_body)
+        draw.text(((width - w) / 2, current_h), line, font=font_body, fill="white")
+        current_h += font_body.getbbox(line)[3] + pad
+
+    # 6. 책 제목 그리기 (우측 하단)
+    title_text = f"- {book_title}"
+    title_w = draw.textlength(title_text, font=font_title)
+    draw.text((width - title_w - 50, height - 100), title_text, font=font_title, fill="#AAAAAA")
+
+    # 7. 이미지를 바이트 데이터로 변환
+    img_byte_arr = io.BytesIO()
+    base_img.convert("RGB").save(img_byte_arr, format='JPEG')
+    img_byte_arr.seek(0)
+    return img_byte_arr
+    
 async def generate_and_send_quotes():
     # 1. 랜덤 책 선정
     selected_books = random.sample(BOOK_LIST, 3)
@@ -47,11 +99,27 @@ async def generate_and_send_quotes():
     )
     
     # 4. 텔레그램 발송
+    # try:
+    #     async with Bot(token=TELEGRAM_TOKEN) as bot:
+    #         await bot.send_message(chat_id=CHAT_ID, text=f"📚 오늘의 추천 문구입니다:\n\n{response.text}")
+    # except Exception as e:
+    #     print(f"텔레그램 전송 실패: {e}")
     try:
         async with Bot(token=TELEGRAM_TOKEN) as bot:
-            await bot.send_message(chat_id=CHAT_ID, text=f"📚 오늘의 추천 문구입니다:\n\n{response.text}")
+            # 5개의 문구 중 가장 마음에 드는 첫 번째 문구로 카드 생성 (예시)
+            # Gemini 응답 형식을 파싱하여 문구와 제목을 분리해야 합니다.
+            first_quote = response.text.split('\n')[0] # 단순 파싱 예시
+            quote_text = first_quote.split(' (')[0].replace('[', '')
+            book_title = first_quote.split(' (')[1].replace(')]', '')
+
+            # 이미지 카드 생성
+            image_data = create_image_card(quote_text, book_title)
+
+            # 이미지 전송
+            await bot.send_photo(chat_id=CHAT_ID, photo=image_data, caption=f"📚 오늘의 추천 문구 원본:\n\n{response.text}")
+            
     except Exception as e:
-        print(f"텔레그램 전송 실패: {e}")
+        print(f"이미지 생성/전송 실패: {e}")
 
 if __name__ == "__main__":
     asyncio.run(generate_and_send_quotes())
