@@ -27,56 +27,59 @@ def create_image_card(text, book_title, page_info):
     """텍스트와 책 제목을 받아 이미지 카드를 생성하고 바이트 데이터로 반환합니다."""
     width, height = 1200, 800
     
-    # 1. 배경 이미지 로드 (background.png 또는 background.jpg 확인)
-    bg_path = "background.png" if os.path.exists("background.png") else "background.jpg"
+    # 1. 배경 이미지 랜덤 선택 로직
+    # 현재 디렉토리에서 background로 시작하고 .png로 끝나는 파일 목록 추출
+    bg_files = [f for f in os.listdir('.') if f.startswith('background') and f.endswith('.png')]
+
+    selected_bg = None
+    if bg_files:
+        selected_bg = random.choice(bg_files)
+        print(f"선택된 배경: {selected_bg}")
     
     try:
-        if os.path.exists(bg_path):
-            base_img = Image.open(bg_path).convert("RGBA").resize((width, height))
+        if selected_bg and os.path.exists(selected_bg):
+            base_img = Image.open(selected_bg).convert("RGBA").resize((width, height))
         else:
-            base_img = Image.new('RGBA', (width, height), color=(30, 30, 30, 255))
-    except Exception:
-        base_img = Image.new('RGBA', (width, height), color=(30, 30, 30, 255))
+            # 배경 파일이 하나도 없을 경우 기본 짙은 회색 배경 사용
+            base_img = Image.new('RGBA', (width, height), color=(35, 39, 46, 255))
+    except Exception as e:
+        print(f"배경 로드 중 오류(기본 배경 전환): {e}")
+        base_img = Image.new('RGBA', (width, height), color=(35, 39, 46, 255))
 
-    # 2. 오버레이 (텍스트 가독성 향상)
-    overlay = Image.new('RGBA', base_img.size, (0, 0, 0, 170))
+    # 2. 가독성을 위한 오버레이 (텍스트가 잘 보이도록 반투명 검은색 추가)
+    overlay = Image.new('RGBA', base_img.size, (0, 0, 0, 175)) # 투명도 약간 강화
     base_img = Image.alpha_composite(base_img, overlay)
     draw = ImageDraw.Draw(base_img)
 
-    # 3. 폰트 설정
+    # 3. 폰트 로드 (font.ttf 파일 필수)
     try:
-        # 본문 폰트 크기를 약간 줄여 가독성 확보 (60 -> 50)
-        font_quote = ImageFont.truetype("font.ttf", 60)   # 본문 문구
-        font_info = ImageFont.truetype("font.ttf", 35)    # 책 제목 및 작가
-        font_page = ImageFont.truetype("font.ttf", 28)    # 페이지 수
+        font_quote = ImageFont.truetype("font.ttf", 55)
+        font_info = ImageFont.truetype("font.ttf", 35)
+        font_page = ImageFont.truetype("font.ttf", 28)
     except OSError:
         font_quote = font_info = font_page = ImageFont.load_default()
 
     # 4. 본문 문구 배치 (중앙 정렬)
     wrapped_lines = textwrap.wrap(text, width=22)
     line_spacing = 25
-    
-    # 전체 텍스트 높이 계산
-    total_text_height = sum([draw.textbbox((0, 0), line, font=font_quote)[3] for line in wrapped_lines]) + (len(wrapped_lines)-1) * line_spacing
-    current_h = (height - total_text_height) / 2 - 40 # 약간 위쪽으로 배치
-    
+    total_h = sum([draw.textbbox((0, 0), l, font=font_quote)[3] for l in wrapped_lines]) + (len(wrapped_lines)-1)*line_spacing
+    current_h = (height - total_h) / 2 - 40
+
     for line in wrapped_lines:
         w = draw.textlength(line, font=font_quote)
         draw.text(((width - w) / 2, current_h), line, font=font_quote, fill="#FFFFFF")
         current_h += draw.textbbox((0, 0), line, font=font_quote)[3] + line_spacing
-    
-# 5. 책 정보 및 페이지 배치 (우측 하단)
-    # 제목(작가) 정보
+
+    # 5. 하단 정보 배치 (출처 및 페이지)
     info_text = f"출처: {book_title}"
     info_w = draw.textlength(info_text, font=font_info)
     draw.text((width - info_w - 70, height - 130), info_text, font=font_info, fill="#E0E0E0")
 
-    # 페이지 정보 (더 작고 연한 색으로)
     page_text = f"Page. {page_info}"
     page_w = draw.textlength(page_text, font=font_page)
     draw.text((width - page_w - 70, height - 80), page_text, font=font_page, fill="#AAAAAA")
 
-    # 6. 바이트 변환
+    # 6. 바이트 변환 및 반환
     img_byte_arr = io.BytesIO()
     base_img.convert("RGB").save(img_byte_arr, format='JPEG', quality=95)
     img_byte_arr.seek(0)
