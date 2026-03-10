@@ -97,29 +97,33 @@ async def generate_and_send_quotes():
         model='gemini-2.5-flash', 
         contents=prompt
     )
-    
+
+    raw_text = response.text.strip()
+
+    if match:
+        quote_text = match.group(1)
+        book_title = match.group(2)
+    else:
+        # 파싱 실패 시 대비책 (Fallback)
+        quote_text = raw_text
+        book_title = "오늘의 명언"
+        
     # 4. 텔레그램 발송
     # try:
     #     async with Bot(token=TELEGRAM_TOKEN) as bot:
     #         await bot.send_message(chat_id=CHAT_ID, text=f"📚 오늘의 추천 문구입니다:\n\n{response.text}")
     # except Exception as e:
     #     print(f"텔레그램 전송 실패: {e}")
+    # 3. 이미지 카드 생성 및 전송
     try:
         async with Bot(token=TELEGRAM_TOKEN) as bot:
-            # 5개의 문구 중 가장 마음에 드는 첫 번째 문구로 카드 생성 (예시)
-            # Gemini 응답 형식을 파싱하여 문구와 제목을 분리해야 합니다.
-            first_quote = response.text.split('\n')[0] # 단순 파싱 예시
-            quote_text = first_quote.split(' (')[0].replace('[', '')
-            book_title = first_quote.split(' (')[1].replace(')]', '')
-
-            # 이미지 카드 생성
             image_data = create_image_card(quote_text, book_title)
-
-            # 이미지 전송
-            await bot.send_photo(chat_id=CHAT_ID, photo=image_data, caption=f"📚 오늘의 추천 문구 원본:\n\n{response.text}")
-            
+            await bot.send_photo(
+                chat_id=CHAT_ID, 
+                photo=image_data, 
+                caption=f"📚 {book_title}\n\n{quote_text}"
+            )
     except Exception as e:
-        print(f"이미지 생성/전송 실패: {e}")
-
+        print(f"전송 단계 오류: {e}")
 if __name__ == "__main__":
     asyncio.run(generate_and_send_quotes())
