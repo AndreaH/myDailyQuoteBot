@@ -1,13 +1,15 @@
 import os
 import random
 import asyncio
+import re
+import io
 from google import genai 
 from telegram import Bot
+from PIL import Image, ImageDraw, ImageFont, ImageFilter  # Pillow 라이브러리
 from telegram.ext import ApplicationBuilder
 import asyncio
-
-from PIL import Image, ImageDraw, ImageFont, ImageFilter  # Pillow 라이브러리
 import textwrap
+
 
 # 1. 설정값 로드
 GENAI_API_KEY = os.getenv("GEMINI_API_KEY")
