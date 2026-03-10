@@ -132,7 +132,7 @@ async def generate_and_send_quotes():
                 )
     
     except Exception as e:
-    print(f"오류 발생: {e}")
+        print(f"오류 발생: {e}")
 
 if __name__ == "__main__":
     asyncio.run(generate_and_send_quotes())
