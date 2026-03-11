@@ -79,8 +79,8 @@ python daily_quote_bot.py
 
 ### 💡 향후 로드맵
 
-* [ ] 이미지 카드 뉴스 생성 기능 (문구 + 이미지 합성)
 * [ ] 독서 기록 데이터베이스(Notion) 연동
 * [ ] 요일별 특정 카테고리(부동산/마인드셋 등) 집중 큐레이션
 
 ---
+* Telegram Channel : https://t.me/+v1Fzyca60u5jN2M1
