@@ -97,9 +97,9 @@ def create_image_card(text, book_title, page_info):
     info_w = draw.textlength(info_text, font=font_info)
     draw.text((width - info_w - 70, height - 130), info_text, font=font_info, fill="#E0E0E0")
 
-    page_text = f"Page. {page_info}"
-    page_w = draw.textlength(page_text, font=font_page)
-    draw.text((width - page_w - 70, height - 80), page_text, font=font_page, fill="#AAAAAA")
+    # page_text = f"Page. {page_info}"
+    # page_w = draw.textlength(page_text, font=font_page)
+    # draw.text((width - page_w - 70, height - 80), page_text, font=font_page, fill="#AAAAAA")
 
     # 6. 바이트 변환 및 반환
     img_byte_arr = io.BytesIO()
@@ -153,7 +153,7 @@ async def generate_and_send_quotes():
             await bot.send_photo(
                 chat_id=CHAT_ID, 
                 photo=image_data, 
-                caption=f"📚 {book_info}\n📄 {page_info}페이지\n\n{quote_text}"
+                caption=f"📚 {book_info}\n\n{quote_text}"
                 )
     
     except Exception as e:
