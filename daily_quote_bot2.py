@@ -10,7 +10,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 # 1. 환경 설정 (환경 변수 권장)
 GENAI_API_KEY = os.getenv("GEMINI_API_KEY")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN2")
+#TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN2")
+TELEGRAM_TOKEN = "8716356961:AAGYmW2X5QDqnuuzYWwZFadaMs7Bw4AT5e4"
 CHAT_ID = os.getenv("CHAT_ID2")
 
 BOOKS = {
