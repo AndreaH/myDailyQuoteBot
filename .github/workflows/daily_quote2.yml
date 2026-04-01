@@ -7,7 +7,7 @@ on:
   workflow_dispatch: # 수동으로 즉시 실행하고 싶을 때 사용
 
 jobs:
-  build:
+  run-bot:
     runs-on: ubuntu-latest
 
     steps:
