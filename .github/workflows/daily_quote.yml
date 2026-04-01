@@ -28,6 +28,6 @@ jobs:
       env:
         # 위에서 설정한 Secrets를 환경 변수로 매핑
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN2 }}
-        CHAT_ID: ${{ secrets.CHAT_ID2 }}
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        CHAT_ID: ${{ secrets.CHAT_ID }}
       run: python daily_quote_bot2.py
