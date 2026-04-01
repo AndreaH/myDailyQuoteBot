@@ -97,9 +97,11 @@ def create_image_card(text, book_title):
 
 async def generate_and_send_quotes():
     try:
+        # 1. 랜덤 책 선정
         selected_books = random.sample(ALL_BOOKS, 3)
         client = genai.Client(api_key=GENAI_API_KEY)
         
+        # 프롬프트 수정: [태그] 추출 조건 추가
         prompt = f"""
         다음 도서 목록 중 가장 통찰력 있는 '단 한 권'을 선택해서 내용을 작성해줘.
         도서 목록: [{selected_books}]
@@ -108,39 +110,45 @@ async def generate_and_send_quotes():
         1. [문구]: 책의 핵심 내용을 담은 80자 이내의 문장 (이미지 삽입용)
         2. [출처]: 책 제목 (p.페이지 번호 포함)
         3. [질문]: 위 문구를 읽고 자신의 삶이나 투자에 적용해볼 수 있는 깊은 질문 (캡션용)
+        4. [태그]: 내용과 어울리는 해시태그 3~5개 (예: #부자아빠 #투자철학 #자기계발)
         
         형식을 반드시 엄격히 지킬 것:
         [문구]: 내용
         [출처]: 내용
         [질문]: 내용
+        [태그]: 내용
         """
         
         response = client.models.generate_content(
-            model='gemini-2.5-flash', 
+            model='gemini-2.0-flash', 
             contents=prompt
         )
 
         raw_text = response.text.strip()
         
-        # 구조적 데이터 파싱
-        data = {"문구": "", "출처": "", "질문": ""}
+        # 구조적 데이터 파싱 (태그 필드 추가)
+        data = {"문구": "", "출처": "", "질문": "", "태그": ""}
         for line in raw_text.split('\n'):
             for key in data.keys():
                 if line.startswith(f"[{key}]:"):
                     data[key] = line.replace(f"[{key}]:", "").strip()
 
+        # 데이터가 비어있을 경우를 대비한 기본값
         if not data["문구"]:
             raise ValueError("Gemini 응답 파싱 실패")
+        if not data["태그"]:
+            data["태그"] = "#독서 #인사이트 #자기계발"
 
-        # 이미지 생성 및 전송
+        # 2. 이미지 생성 (이미지에는 문구와 출처만 포함)
         image_data = create_image_card(data["문구"], data["출처"])
         
+        # 3. 텔레그램 전송 (캡션에 질문과 AI 생성 태그 배치)
         async with Bot(token=TELEGRAM_TOKEN) as bot:
             caption_message = (
                 f"📚 **오늘의 도서**: {data['출처']}\n\n"
                 f"💡 **성장을 위한 질문**\n"
                 f"\"{data['질문']}\"\n\n"
-                f"#독서 #투자마인드 #자기계발"
+                f"{data['태그']}" # AI가 생성한 태그 삽입
             )
             
             await bot.send_photo(
