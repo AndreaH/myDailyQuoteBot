@@ -1,4 +1,4 @@
-readme_en_content = """# 📚 AI Daily Book Quote Bot
+# 📚 AI Daily Book Quote Bot
 
 > **Intelligent Reading Coach Automation System Powered by Gemini 2.0 & Telegram**
 
