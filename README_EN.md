@@ -47,3 +47,68 @@ pip install google-genai python-telegram-bot
 
 # Run the script
 python daily_quote_bot.py
+
+```
+
+---
+
+
+## 📅 Execution Schedule (Cron)
+
+This project runs on the following schedule via GitHub Actions:
+
+* **Scheduled Time:** 23:00 UTC daily (equivalent to **08:00 AM KST**)
+* **Workflow File:** `.github/workflows/daily_quote.yml`
+
+```yml
+name: AI Daily Book Quote Bot
+
+on:
+  schedule:
+    # 23:00 UTC is 08:00 AM KST
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install google-genai python-telegram-bot
+      - name: Run Bot
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: python daily_quote_bot.py
+```
+---
+
+## 📝 Book List (Dataset)
+
+Currently, the project generates quotes based on curated masterpieces such as:
+
+* Finance: *he Property of Money, The Millionaire Fastlane, Leverage...*
+* Self-Improvement: *The One Thing, Grit, Atomic Habits...*
+* Real Estate: *Retire as a Salaried Rich Person, The Essence of Real Estate Investment....*
+
+---
+
+## 🤝 Contribution
+
+Contributions to add new books to the list or suggestions for functional improvements are always welcome via **Pull Request** or **Issue**.
+
+---
+
+### 💡 Roadmap
+
+* [ ] Integration with reading record databases (e.g., Notion)
+* [ ] Daily-themed curation focusing on specific categories (Real Estate, Mindset, etc.)
+
+---
+* Telegram Channel : https://t.me/+v1Fzyca60u5jN2M1
