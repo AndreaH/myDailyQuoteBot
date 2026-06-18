@@ -97,7 +97,7 @@ def create_image_card(text, book_title):
 async def generate_and_send_quotes():
     try:
         # 1. 랜덤 책 선정
-        selected_books = random.sample(ALL_BOOKS, 3)
+        selected_book = random.choice(ALL_BOOKS)
         client = genai.Client(api_key=GENAI_API_KEY)
         
         # 프롬프트 수정: [태그] 추출 조건 추가
@@ -118,12 +118,19 @@ async def generate_and_send_quotes():
         [태그]: 내용
         """
         
+        # response = client.models.generate_content(
+        #     model='gemini-2.5-flash', 
+        #     contents=prompt
+        # )
+
+        # raw_text = response.text.strip()
         response = client.models.generate_content(
-            model='gemini-2.5-flash', 
-            contents=prompt
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config={"response_mime_type": "application/json"}
         )
 
-        raw_text = response.text.strip()
+        raw_text = json.loads(response.text)
         
         # 구조적 데이터 파싱 (태그 필드 추가)
         data = {"문구": "", "출처": "", "질문": "", "태그": ""}
