@@ -1,28 +1,38 @@
 import os
-import random
-import asyncio
 import re
 import io
+import random
+import asyncio
 import textwrap
-from google import genai 
+
+from google import genai
 from telegram import Bot
 from PIL import Image, ImageDraw, ImageFont
 
-# 1. 환경 설정 (환경 변수 권장)
+# ---------------------------------------------------------------------------
+# 설정값 로드
+# ---------------------------------------------------------------------------
 GENAI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Gemini 모델 우선순위 (503 발생 시 다음 모델로 fallback)
+GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"]
+
+# ---------------------------------------------------------------------------
+# 도서 목록 (books.json으로 분리 권장)
+# ---------------------------------------------------------------------------
 BOOKS = {
     "부동산 및 경제경영": [
         "나는 부동산과 맞벌이한다(너바나)", "월급쟁이 부자로 은퇴하라(너나위)", "결국엔 오르는 아파트",
         "월가의 영웅(피터 린치)", "자본주의(EBS)", "돈의 속성(김승호)", "부의 인문학(브라운스톤)",
         "부자 아빠 투자 가이드(로버트 기요사키)", "보도 섀퍼의 돈(보도 섀퍼)", "이웃집 백만장자",
         "전세가를 알면 부동산 투자가 보인다", "부동산 투자의 정석", "노후를 위해 집을 이용하라",
-        "부동산 트렌 2026", "부자는 왜 더 부자가 되는가(로버트 기요사키)", "부의 전략 수업",
+        "부동산 트렌드 2026", "부자는 왜 더 부자가 되는가(로버트 기요사키)", "부의 전략 수업",
         "현명한 투자자(벤저민 그레이엄)", "부의 추월차선(엠제이 드마코)", "투자에 대한 생각(하워드 막스)",
-        "시골의사의 부자경제학(박경철)", "강남의 탄생", "머니트렌드 2026"
+        "시골의사의 부자경제학(박경철)", "강남의 탄생", "머니트렌드 2026",
     ],
     "자기계발 및 마인드셋": [
         "원씽(ONE THING)", "인생투자", "사장학개론(김승호)", "나의 스무 살을 가장 존중한다",
@@ -35,48 +45,99 @@ BOOKS = {
         "마음의 기술", "5초의 법칙(멜 로빈스)", "설득의 심리학(로버트 치알디니)",
         "마인드셋(캐럴 드웩)", "아비투스(Habitus)", "성공하는 사람들의 7가지 습관",
         "후회의 재발견(다니엘 핑크)", "회복탄력성(김주환)", "고수의 생각법",
-        "퓨처 셀프(벤저민 하디)", "프레임(최인철)", "에고라는 적(라이언 홀리데이)", "챔피언 마인드"
+        "퓨처 셀프(벤저민 하디)", "프레임(최인철)", "에고라는 적(라이언 홀리데이)", "챔피언 마인드",
     ],
     "인문 및 기타": [
         "불변의 법칙(모건 하우절)", "포노 사피엔스(최재붕)", "죽음의 수용소에서(빅터 프랭클)",
-        "행복의 기원(서은국)", "최고의 휴식", "인생은 순간이다(김성근)", "일본전산 이야기(김성호)"
-    ]
+        "행복의 기원(서은국)", "최고의 휴식", "인생은 순간이다(김성근)", "일본전산 이야기(김성호)",
+    ],
 }
 
-ALL_BOOKS = [book for sublist in BOOKS.values() for book in sublist]
+ALL_BOOKS = [book for books in BOOKS.values() for book in books]
 
-def create_image_card(text, book_title):
-    """문구와 제목을 받아 이미지 카드를 생성합니다."""
+
+# ---------------------------------------------------------------------------
+# Telegram MarkdownV2 이스케이프
+# ---------------------------------------------------------------------------
+def escape_markdown_v2(text: str) -> str:
+    """MarkdownV2에서 특수문자를 이스케이프합니다."""
+    return re.sub(r'([_*\[\]()~`>#+\-=|{}.!\\])', r'\\\1', text)
+
+
+# ---------------------------------------------------------------------------
+# Gemini 호출 (Exponential Backoff + 모델 Fallback)
+# ---------------------------------------------------------------------------
+async def call_gemini_with_retry(client, prompt: str, max_retries: int = 3) -> str:
+    """503 UNAVAILABLE 오류 시 재시도하고, 실패 시 다음 모델로 fallback합니다."""
+    for model in GEMINI_MODELS:
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                )
+                print(f"[Gemini] 모델: {model}, 시도: {attempt + 1}")
+                return response.text.strip()
+            except Exception as e:
+                is_unavailable = "503" in str(e) or "UNAVAILABLE" in str(e)
+                if is_unavailable and attempt < max_retries - 1:
+                    wait_seconds = (2 ** attempt) + random.uniform(0, 1)
+                    print(f"[Gemini] 503 오류 → {wait_seconds:.1f}초 후 재시도 ({attempt + 1}/{max_retries})")
+                    await asyncio.sleep(wait_seconds)
+                elif is_unavailable:
+                    print(f"[Gemini] {model} 최대 재시도 초과 → 다음 모델로 전환")
+                    break
+                else:
+                    raise
+
+    raise RuntimeError("모든 Gemini 모델에서 응답을 받지 못했습니다.")
+
+
+# ---------------------------------------------------------------------------
+# 이미지 카드 생성
+# ---------------------------------------------------------------------------
+def create_image_card(quote: str, source: str) -> io.BytesIO:
+    """명언과 출처를 받아 이미지 카드를 생성하고 BytesIO로 반환합니다."""
     width, height = 1200, 800
-    
-    # 배경 이미지 로드
-    bg_files = [f for f in os.listdir('.') if f.startswith('background') and f.endswith('.png')]
-    selected_bg = random.choice(bg_files) if bg_files else None
-    
-    try:
-        if selected_bg:
-            base_img = Image.open(selected_bg).convert("RGBA").resize((width, height))
-        else:
-            base_img = Image.new('RGBA', (width, height), color=(30, 30, 35, 255))
-    except:
-        base_img = Image.new('RGBA', (width, height), color=(30, 30, 35, 255))
 
-    # 반투명 오버레이 (가독성 향상)
-    overlay = Image.new('RGBA', base_img.size, (0, 0, 0, 160))
+    # 배경 이미지 랜덤 선택 (스크립트 디렉토리 기준 절대 경로)
+    bg_files = [
+        f for f in os.listdir(BASE_DIR)
+        if f.startswith("background") and f.endswith(".png")
+    ]
+
+    base_img = None
+    if bg_files:
+        selected_bg = os.path.join(BASE_DIR, random.choice(bg_files))
+        try:
+            base_img = Image.open(selected_bg).convert("RGBA").resize((width, height))
+            print(f"[Image] 배경: {os.path.basename(selected_bg)}")
+        except Exception as e:
+            print(f"[Image] 배경 로드 실패 ({e}) → 기본 배경 사용")
+
+    if base_img is None:
+        base_img = Image.new("RGBA", (width, height), color=(35, 39, 46, 255))
+
+    # 가독성 오버레이
+    overlay = Image.new("RGBA", base_img.size, (0, 0, 0, 175))
     base_img = Image.alpha_composite(base_img, overlay)
     draw = ImageDraw.Draw(base_img)
 
-    # 폰트 설정
+    # 폰트 로드
+    font_path = os.path.join(BASE_DIR, "font.ttf")
     try:
-        font_quote = ImageFont.truetype("font.ttf", 52)
-        font_info = ImageFont.truetype("font.ttf", 32)
-    except:
+        font_quote = ImageFont.truetype(font_path, 52)
+        font_info = ImageFont.truetype(font_path, 32)
+    except OSError:
         font_quote = font_info = ImageFont.load_default()
 
-    # 문구 줄바꿈 및 배치
-    wrapped_lines = textwrap.wrap(text, width=22)
+    # 명언 중앙 배치
+    wrapped_lines = textwrap.wrap(quote, width=22)
     line_spacing = 20
-    total_h = sum([draw.textbbox((0, 0), l, font=font_quote)[3] for l in wrapped_lines]) + (len(wrapped_lines)-1)*line_spacing
+    total_h = (
+        sum(draw.textbbox((0, 0), line, font=font_quote)[3] for line in wrapped_lines)
+        + (len(wrapped_lines) - 1) * line_spacing
+    )
     current_h = (height - total_h) / 2 - 30
 
     for line in wrapped_lines:
@@ -84,90 +145,91 @@ def create_image_card(text, book_title):
         draw.text(((width - w) / 2, current_h), line, font=font_quote, fill="#FFFFFF")
         current_h += draw.textbbox((0, 0), line, font=font_quote)[3] + line_spacing
 
-    # 출처 배치
-    info_text = f"출처: {book_title}"
+    # 출처 하단 배치
+    info_text = f"출처: {source}"
     info_w = draw.textlength(info_text, font=font_info)
     draw.text((width - info_w - 70, height - 100), info_text, font=font_info, fill="#CCCCCC")
 
-    img_byte_arr = io.BytesIO()
-    base_img.convert("RGB").save(img_byte_arr, format='JPEG', quality=95)
-    img_byte_arr.seek(0)
-    return img_byte_arr
+    img_bytes = io.BytesIO()
+    base_img.convert("RGB").save(img_bytes, format="JPEG", quality=95)
+    img_bytes.seek(0)
+    return img_bytes
 
-async def generate_and_send_quotes():
-    try:
-        # 1. 랜덤 책 선정
-        selected_books = random.sample(ALL_BOOKS, 3)
-        client = genai.Client(api_key=GENAI_API_KEY)
-        
-        # 프롬프트 수정: [태그] 추출 조건 추가
-        prompt = f"""
-        다음 도서 목록 중 가장 통찰력 있는 '단 한 권'을 선택해서 내용을 작성해줘.
-        도서 목록: [{selected_books}]
-        
-        조건:
-        1. [문구]: 책의 핵심 내용을 담은 80자 이내의 문장 (이미지 삽입용)
-        2. [출처]: 책 제목 (p.페이지 번호 포함)
-        3. [질문]: 위 문구를 읽고 자신의 삶이나 투자에 적용해볼 수 있는 깊은 질문 (캡션용)
-        4. [태그]: 내용과 어울리는 해시태그 3~5개 (예: #부자아빠 #투자철학 #자기계발)
-        
-        형식을 반드시 엄격히 지킬 것:
-        [문구]: 내용
-        [출처]: 내용
-        [질문]: 내용
-        [태그]: 내용
-        """
-        
-        # response = client.models.generate_content(
-        #     model='gemini-2.5-flash', 
-        #     contents=prompt
-        # )
 
-        # raw_text = response.text.strip()
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config={"response_mime_type": "application/json"}
+# ---------------------------------------------------------------------------
+# 응답 파싱
+# ---------------------------------------------------------------------------
+def parse_gemini_response(raw_text: str) -> dict:
+    """Gemini 응답에서 [문구], [출처], [질문], [태그] 필드를 파싱합니다."""
+    data = {"문구": "", "출처": "", "질문": "", "태그": ""}
+    for line in raw_text.split("\n"):
+        for key in data:
+            prefix = f"[{key}]:"
+            if line.strip().startswith(prefix):
+                data[key] = line.strip()[len(prefix):].strip()
+                break
+    return data
+
+
+# ---------------------------------------------------------------------------
+# 메인 실행 함수
+# ---------------------------------------------------------------------------
+async def generate_and_send_quote():
+    selected_book = random.choice(ALL_BOOKS)
+    print(f"[Bot] 선택된 책: {selected_book}")
+
+    client = genai.Client(api_key=GENAI_API_KEY)
+
+    prompt = f"""
+다음 도서에서 핵심 내용을 담은 문장을 작성해줘.
+도서: {selected_book}
+
+조건:
+1. [문구]: 책의 핵심 내용을 담은 80자 이내의 문장 (이미지 삽입용)
+2. [출처]: 책 제목 (p.페이지 번호 포함)
+3. [질문]: 위 문구를 읽고 자신의 삶이나 투자에 적용해볼 수 있는 깊은 질문 (캡션용)
+4. [태그]: 내용과 어울리는 해시태그 3~5개 (예: #부자아빠 #투자철학 #자기계발)
+
+형식을 반드시 엄격히 지킬 것:
+[문구]: 내용
+[출처]: 내용
+[질문]: 내용
+[태그]: 내용
+"""
+
+    raw_text = await call_gemini_with_retry(client, prompt)
+    data = parse_gemini_response(raw_text)
+
+    if not data["문구"]:
+        raise ValueError(f"Gemini 응답 파싱 실패.\n원본 응답:\n{raw_text}")
+
+    if not data["태그"]:
+        data["태그"] = "#독서 #인사이트 #자기계발"
+
+    image_data = create_image_card(data["문구"], data["출처"])
+
+    # Telegram MarkdownV2 이스케이프 적용
+    source_escaped = escape_markdown_v2(data["출처"])
+    question_escaped = escape_markdown_v2(data["질문"])
+    tags_escaped = escape_markdown_v2(data["태그"])
+
+    caption = (
+        f"📚 *오늘의 도서*: {source_escaped}\n\n"
+        f"💡 *성장을 위한 질문*\n"
+        f"\"{question_escaped}\"\n\n"
+        f"{tags_escaped}"
+    )
+
+    async with Bot(token=TELEGRAM_TOKEN) as bot:
+        await bot.send_photo(
+            chat_id=CHAT_ID,
+            photo=image_data,
+            caption=caption,
+            parse_mode="MarkdownV2",
         )
 
-        raw_text = json.loads(response.text)
-        
-        # 구조적 데이터 파싱 (태그 필드 추가)
-        data = {"문구": "", "출처": "", "질문": "", "태그": ""}
-        for line in raw_text.split('\n'):
-            for key in data.keys():
-                if line.startswith(f"[{key}]:"):
-                    data[key] = line.replace(f"[{key}]:", "").strip()
+    print(f"[Bot] 전송 완료: {data['출처']}")
 
-        # 데이터가 비어있을 경우를 대비한 기본값
-        if not data["문구"]:
-            raise ValueError("Gemini 응답 파싱 실패")
-        if not data["태그"]:
-            data["태그"] = "#독서 #인사이트 #자기계발"
-
-        # 2. 이미지 생성 (이미지에는 문구와 출처만 포함)
-        image_data = create_image_card(data["문구"], data["출처"])
-        
-        # 3. 텔레그램 전송 (캡션에 질문과 AI 생성 태그 배치)
-        async with Bot(token=TELEGRAM_TOKEN) as bot:
-            caption_message = (
-                f"📚 **오늘의 도서**: {data['출처']}\n\n"
-                f"💡 **성장을 위한 질문**\n"
-                f"\"{data['질문']}\"\n\n"
-                f"{data['태그']}" # AI가 생성한 태그 삽입
-            )
-            
-            await bot.send_photo(
-                chat_id=CHAT_ID, 
-                photo=image_data, 
-                caption=caption_message,
-                parse_mode="Markdown"
-            )
-        
-        print(f"전송 완료: {data['출처']}")
-
-    except Exception as e:
-        print(f"오류 발생: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(generate_and_send_quotes())
+    asyncio.run(generate_and_send_quote())
