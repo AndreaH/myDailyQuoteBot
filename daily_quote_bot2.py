@@ -97,7 +97,7 @@ def create_image_card(text, book_title):
 async def generate_and_send_quotes():
     try:
         # 1. 랜덤 책 선정
-        selected_book = random.choice(ALL_BOOKS)
+        selected_books = random.sample(ALL_BOOKS, 3)
         client = genai.Client(api_key=GENAI_API_KEY)
         
         # 프롬프트 수정: [태그] 추출 조건 추가
