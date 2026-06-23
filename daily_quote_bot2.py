@@ -22,7 +22,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"]
 
 # ---------------------------------------------------------------------------
-# 도서 목록 (books.json으로 분리 권장)
+# 도서 목록 (하이쿠 카테고리 추가)
 # ---------------------------------------------------------------------------
 BOOKS = {
     "부동산 및 경제경영": [
@@ -51,10 +51,11 @@ BOOKS = {
         "불변의 법칙(모건 하우절)", "포노 사피엔스(최재붕)", "죽음의 수용소에서(빅터 프랭클)",
         "행복의 기원(서은국)", "최고의 휴식", "인생은 순간이다(김성근)", "일본전산 이야기(김성호)",
     ],
+    "삶의 통찰(하이쿠)": [
+        "마쓰오 바쇼 하이쿠 선집", "고바야시 잇사 하이쿠 선집", "요사 부손 하이쿠 선집",
+        "에도 시대 고전 하이쿠", "인생의 본질을 꿰뚫는 일본 명작 하이쿠"
+    ]
 }
-
-ALL_BOOKS = [book for books in BOOKS.values() for book in books]
-
 
 # ---------------------------------------------------------------------------
 # Telegram MarkdownV2 이스케이프
@@ -145,7 +146,7 @@ def create_image_card(quote: str, source: str) -> io.BytesIO:
         draw.text(((width - w) / 2, current_h), line, font=font_quote, fill="#FFFFFF")
         current_h += draw.textbbox((0, 0), line, font=font_quote)[3] + line_spacing
 
-    # 출처 하단 배치
+    # 出처 하단 배치
     info_text = f"출처: {source}"
     info_w = draw.textlength(info_text, font=font_info)
     draw.text((width - info_w - 70, height - 100), info_text, font=font_info, fill="#CCCCCC")
@@ -175,12 +176,35 @@ def parse_gemini_response(raw_text: str) -> dict:
 # 메인 실행 함수
 # ---------------------------------------------------------------------------
 async def generate_and_send_quote():
-    selected_book = random.choice(ALL_BOOKS)
-    print(f"[Bot] 선택된 책: {selected_book}")
+    # 카테고리 먼저 무작위 선택 후 내부 도서 선택 (하이쿠가 배정될 확률 확보를 위함)
+    selected_category = random.choice(list(BOOKS.keys()))
+    selected_book = random.choice(BOOKS[selected_category])
+    print(f"[Bot] 선택된 카테고리: {selected_category} -> 선택된 항목: {selected_book}")
 
     client = genai.Client(api_key=GENAI_API_KEY)
 
-    prompt = f"""
+    # 하이쿠 카테고리인 경우 프롬프트 변경 (요청사항 반영)
+    if selected_category == "삶의 통찰(하이쿠)":
+        prompt = f"""
+인생의 깊은 통찰과 깨달음이 담긴 유명한 하이쿠(Haiku) 한 편을 선정하고 분석을 작성해줘.
+도서/주제 제안: {selected_book}
+
+조건:
+1. [문구]: 하이쿠의 번역본을 줄바꿈을 활용하여 아름답게 작성 (예: "달팽이야\n쉬엄쉬엄 올라라\n후지산이란다") (이미지 삽입용)
+2. [출처]: 하이쿠 작가 이름 (예: 고바야시 잇사)
+3. [질문]: (원문 / 번역문)을 서두에 보여주고, 이어서 이 하이쿠가 주는 삶의 숨은 의미와 통찰을 깊이 있게 해석하여 작성해줘. (텔레그램 캡션용)
+   * 가독성을 위해 줄바꿈을 명확히 할 것.
+4. [태그]: 내용과 어울리는 해시태그 3~5개 (예: #하이쿠 #인생문구 #마음챙김 #명상)
+
+형식을 반드시 엄격히 지킬 것:
+[문구]: 내용
+[출처]: 내용
+[질문]: 내용
+[태그]: 내용
+"""
+    else:
+        # 기존 도서 프롬프트 유지
+        prompt = f"""
 다음 도서에서 핵심 내용을 담은 문장을 작성해줘.
 도서: {selected_book}
 
@@ -213,12 +237,20 @@ async def generate_and_send_quote():
     question_escaped = escape_markdown_v2(data["질문"])
     tags_escaped = escape_markdown_v2(data["태그"])
 
-    caption = (
-        f"📚 *오늘의 도서*: {source_escaped}\n\n"
-        f"💡 *성장을 위한 질문*\n"
-        f"\"{question_escaped}\"\n\n"
-        f"{tags_escaped}"
-    )
+    if selected_category == "삶의 통찰(하이쿠)":
+        caption = (
+            f"🌿 *오늘의 하이쿠*: {source_escaped}\n\n"
+            f"💡 *원문/번역문 및 숨은 의미*\n"
+            f"{question_escaped}\n\n"
+            f"{tags_escaped}"
+        )
+    else:
+        caption = (
+            f"📚 *오늘의 도서*: {source_escaped}\n\n"
+            f"💡 *성장을 위한 질문*\n"
+            f"\"{question_escaped}\"\n\n"
+            f"{tags_escaped}"
+        )
 
     async with Bot(token=TELEGRAM_TOKEN) as bot:
         await bot.send_photo(
